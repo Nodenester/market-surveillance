@@ -1,0 +1,1091 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SURVEIL — Market Manipulation Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #070a0f;
+  --s1: #0b0f18;
+  --s2: #10161f;
+  --s3: #151d28;
+  --bd: #1e2733;
+  --bd2: #283040;
+  --tx: #b8c5d6;
+  --dim: #4a5568;
+  --bright: #e8f0f8;
+  --grn: #22c55e;
+  --grnD: rgba(34,197,94,.1);
+  --red: #ef4444;
+  --redD: rgba(239,68,68,.1);
+  --amb: #f59e0b;
+  --ambD: rgba(245,158,11,.1);
+  --blu: #3b82f6;
+  --bluD: rgba(59,130,246,.12);
+  --cyn: #06b6d4;
+  --pur: #a855f7;
+  --lime: #84cc16;
+  --pink: #ec4899;
+  --mono: 'JetBrains Mono', monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);font-family:var(--mono);font-size:12px}
+
+/* ── TOPBAR ── */
+#topbar {
+  display:flex;align-items:center;gap:12px;padding:0 14px;
+  background:var(--s1);border-bottom:1px solid var(--bd);
+  height:54px;flex-shrink:0;position:relative;z-index:10;
+}
+.logo{font-size:13px;font-weight:800;letter-spacing:3px;color:var(--blu);text-transform:uppercase;white-space:nowrap;flex-shrink:0}
+.logo span{color:var(--dim);font-weight:400;font-size:10px;letter-spacing:1px;margin-left:6px}
+
+/* Big price ticker */
+.ticker-main{display:flex;align-items:baseline;gap:8px;padding:0 12px;border-left:1px solid var(--bd);border-right:1px solid var(--bd);flex-shrink:0}
+.ticker-sym{font-size:10px;color:var(--dim);letter-spacing:1px;font-weight:600;text-transform:uppercase}
+.ticker-price{font-size:28px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1}
+.ticker-chg{font-size:12px;font-weight:600;padding:2px 7px;border-radius:3px}
+.chg-up{background:var(--grnD);color:var(--grn)}
+.chg-dn{background:var(--redD);color:var(--red)}
+.chg-fl{background:var(--s2);color:var(--dim)}
+
+/* Poly tickers */
+.poly-tickers{display:flex;gap:8px;padding:0 12px;border-right:1px solid var(--bd);flex-shrink:0}
+.ptick{display:flex;flex-direction:column;align-items:center;gap:1px;padding:2px 10px;border-radius:4px;border:1px solid var(--bd);background:var(--s2);min-width:70px;cursor:default}
+.ptick:hover{border-color:var(--bd2)}
+.ptick .ps{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.ptick .pp{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+
+/* Cycle bar */
+.cycle-area{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.bar-outer{flex:1;height:22px;background:var(--s2);border-radius:3px;position:relative;overflow:hidden;border:1px solid var(--bd);min-width:80px}
+.bar-fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,rgba(59,130,246,.2),rgba(59,130,246,.4));border-right:2px solid var(--blu);transition:width .4s}
+.bar-kz{position:absolute;right:0;top:0;bottom:0;background:repeating-linear-gradient(-45deg,rgba(239,68,68,.1),rgba(239,68,68,.1)3px,transparent 3px,transparent 6px)}
+.bar-kz.active{background:repeating-linear-gradient(-45deg,rgba(239,68,68,.22),rgba(239,68,68,.22)3px,transparent 3px,transparent 6px)}
+.bar-label{position:absolute;left:6px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--dim)}
+.cycle-utc{font-size:10px;color:var(--dim);white-space:nowrap}
+.timer{font-size:26px;font-weight:800;color:var(--grn);min-width:68px;text-align:right;font-variant-numeric:tabular-nums;flex-shrink:0}
+.timer.kz{color:var(--red);animation:blink .6s ease infinite alternate}
+@keyframes blink{to{opacity:.4}}
+
+/* Phase pill */
+.phase{padding:4px 12px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;flex-shrink:0}
+.ph-IDLE{background:var(--s2);color:var(--dim)}
+.ph-DRAIN_DETECTED{background:var(--ambD);color:var(--amb);border:1px solid rgba(245,158,11,.3)}
+.ph-MM_FLEEING{background:rgba(249,115,22,.12);color:#f97316;border:1px solid rgba(249,115,22,.3);animation:blink .8s ease infinite alternate}
+.ph-STRIKE_IMMINENT{background:var(--redD);color:var(--red);border:1px solid rgba(239,68,68,.4);animation:blink .3s ease infinite alternate;font-size:11px}
+
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;background:var(--s2);border-radius:3px;font-size:10px;white-space:nowrap;border:1px solid var(--bd)}
+.chip .l{color:var(--dim)}.chip .v{font-weight:600}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:var(--grn);display:inline-block;flex-shrink:0}
+.conn-dot.off{background:var(--red)}
+
+/* ── MAIN LAYOUT ── */
+#app{display:grid;grid-template-rows:54px 1fr auto;height:100%;overflow:hidden}
+#main{display:flex;min-height:0;gap:1px;background:var(--bd);overflow:hidden}
+
+/* Left: charts column */
+#chart-col{display:flex;flex-direction:column;flex:1;min-width:0;overflow:hidden;background:var(--bg)}
+#chart-stats{display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--s1);border-bottom:1px solid var(--bd);flex-wrap:wrap;flex-shrink:0}
+.chart-panel{position:relative;min-height:0;background:var(--bg);border-bottom:1px solid var(--bd)}
+.chart-panel canvas{position:absolute;inset:0;width:100%;height:100%}
+.chart-label{position:absolute;top:4px;left:8px;font-size:9px;color:var(--dim);z-index:1;pointer-events:none;letter-spacing:.8px;text-transform:uppercase}
+.chart-panel-price{flex:11}
+.chart-panel-vol{flex:5}
+.chart-panel-cvd{flex:4}
+
+/* ── SIDEBAR ── */
+#sidebar{width:300px;flex-shrink:0;display:flex;flex-direction:column;background:var(--s1);overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--bd) transparent}
+.sb-block{border-bottom:1px solid var(--bd);padding:8px 10px;flex-shrink:0}
+.sb-title{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.sb-title .badge{font-size:10px;padding:1px 6px;border-radius:3px;background:var(--s2);color:var(--tx);letter-spacing:0;text-transform:none;font-weight:600}
+.depth-row{display:flex;gap:6px;flex-wrap:wrap;margin:-2px 0 6px}
+.depth-row .chip{font-size:9px;padding:2px 6px}
+.depth-row .chip.up{border-color:rgba(34,197,94,.25);background:rgba(34,197,94,.06)}
+.depth-row .chip.dn{border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.06)}
+
+/* Prediction */
+.pred-row{display:flex;align-items:center;gap:8px}
+.pred-dir{font-size:22px;font-weight:800;min-width:30px}
+.pred-bar{flex:1;height:5px;background:var(--bg);border-radius:3px;overflow:hidden}
+.pred-fill{height:100%;border-radius:3px;transition:width .3s}
+.pred-conf{font-size:11px;font-weight:600;color:var(--dim);min-width:32px;text-align:right}
+.mm-pill{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:1px}
+.mm-PRESENT{background:var(--grnD);color:var(--grn)}
+.mm-THINNING{background:var(--ambD);color:var(--amb)}
+.mm-FLED{background:var(--redD);color:var(--red);animation:blink .5s ease infinite alternate}
+.mm-UNKNOWN{background:var(--s2);color:var(--dim)}
+
+/* Alerts */
+.alert-scroll{max-height:180px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--bd) transparent}
+.arow{display:flex;gap:5px;padding:2px 0;border-bottom:1px solid rgba(30,39,51,.8);font-size:10px;align-items:baseline}
+.arow .ts{color:var(--dim);flex-shrink:0;font-size:9px}
+.arow .sv{flex-shrink:0;width:44px;text-align:center;font-weight:700;font-size:8px;padding:1px 3px;border-radius:2px;letter-spacing:.5px}
+.sv-C{background:rgba(239,68,68,.15);color:var(--red)}
+.sv-H{background:rgba(245,158,11,.12);color:var(--amb)}
+.sv-W{background:rgba(245,158,11,.08);color:#a07000}
+.sv-I{background:var(--s2);color:var(--dim)}
+.arow .msg{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--tx)}
+
+/* Order Books */
+.book-wrap{display:flex;flex-direction:column;gap:1px}
+.book-section{font-size:9px;font-weight:700;letter-spacing:.5px;color:var(--dim);margin:3px 0 2px;text-transform:uppercase}
+.book-row{display:flex;align-items:center;gap:4px;padding:1px 0;position:relative;font-size:10px;font-variant-numeric:tabular-nums}
+.book-row .book-bg{position:absolute;right:0;top:0;bottom:0;opacity:1;pointer-events:none;border-radius:2px}
+.book-row .book-price{font-weight:600;width:60px;text-align:right;position:relative;z-index:1}
+.book-row .book-qty{color:var(--dim);min-width:50px;text-align:right;position:relative;z-index:1}
+.book-row .book-total{color:var(--dim);min-width:45px;text-align:right;font-size:9px;position:relative;z-index:1}
+.book-mid{text-align:center;padding:3px 0;font-size:10px;color:var(--dim);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);margin:2px 0;background:var(--s2)}
+
+/* ── BOTTOM: HISTORY + HOLDERS ── */
+#bottom{display:flex;flex-direction:column;flex-shrink:0;background:var(--bd);gap:1px;max-height:280px}
+#history-section{background:var(--s1);padding:0;flex-shrink:0;display:flex;flex-direction:column;min-height:0}
+.hist-header{display:flex;align-items:center;justify-content:space-between;padding:5px 10px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.hist-header .ht{font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase}
+.pat-row{display:flex;gap:6px;flex-wrap:wrap}
+.pat-chip{display:inline-flex;gap:3px;padding:1px 6px;background:var(--s2);border-radius:3px;font-size:10px}
+.hist-scroll{max-height:140px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--bd) transparent}
+table{width:100%;border-collapse:collapse;font-size:10px}
+th{text-align:left;padding:3px 6px;color:var(--dim);border-bottom:1px solid var(--bd);font-size:9px;letter-spacing:.5px;text-transform:uppercase;font-weight:500;white-space:nowrap;position:sticky;top:0;background:var(--s1)}
+td{padding:2px 6px;border-bottom:1px solid rgba(30,39,51,.6);font-variant-numeric:tabular-nums;white-space:nowrap}
+.c-up{color:var(--grn)}.c-dn{color:var(--red)}.c-fl{color:var(--dim)}
+
+#holders-section{display:flex;background:var(--s1);flex-shrink:0;height:112px}
+.holders-half{flex:1;padding:6px 10px;border-right:1px solid var(--bd);overflow:hidden;display:flex;flex-direction:column}
+.holders-half:last-child{border-right:none}
+.holders-half .hh{font-size:9px;font-weight:700;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin-bottom:4px;display:flex;justify-content:space-between;flex-shrink:0}
+.holders-scroll{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--bd) transparent;min-height:0}
+.hrow{display:flex;align-items:center;gap:5px;padding:2px 0;border-bottom:1px solid rgba(30,39,51,.5);font-size:10px}
+.hbar{height:6px;border-radius:2px;min-width:2px}
+
+/* Colors */
+.up{color:var(--grn)}.dn{color:var(--red)}.fl{color:var(--dim)}
+.bold{font-weight:700}
+.settled{font-weight:700;font-size:11px}
+
+/* Glow */
+body.glow-strike{box-shadow:inset 0 0 80px rgba(239,68,68,.14)}
+body.glow-flee{box-shadow:inset 0 0 50px rgba(249,115,22,.08)}
+body.glow-drain{box-shadow:inset 0 0 30px rgba(245,158,11,.06)}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ═══ TOP BAR ═══ -->
+<div id="topbar">
+  <div class="logo">SURVEIL<span>manipulation detector</span></div>
+
+  <div class="ticker-main">
+    <div>
+      <div class="ticker-sym" id="t-sym">BTC/USDT</div>
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <span class="ticker-price" id="t-price">$--</span>
+        <span class="ticker-chg chg-fl" id="t-chg">--%</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:2px;margin-left:8px;font-size:10px">
+      <div><span class="dim" style="color:var(--dim)">Open </span><span id="t-open" class="bold">--</span></div>
+      <div><span class="dim" style="color:var(--dim)">Ticks </span><span id="t-ticks">--</span><span style="color:var(--dim)">/s</span></div>
+    </div>
+  </div>
+
+  <div class="poly-tickers">
+    <div class="ptick" id="ptick-yes">
+      <span class="ps" style="color:var(--grn)">YES UP</span>
+      <span class="pp up" id="t-yes">$--</span>
+      <span style="font-size:9px;color:var(--dim)" id="t-yes-flow">-/-</span>
+    </div>
+    <div class="ptick" id="ptick-no">
+      <span class="ps" style="color:var(--red)">NO DOWN</span>
+      <span class="pp dn" id="t-no">$--</span>
+      <span style="font-size:9px;color:var(--dim)" id="t-no-flow">-/-</span>
+    </div>
+    <div class="ptick">
+      <span class="ps" style="color:var(--dim)">ENDS</span>
+      <span class="pp" style="font-size:13px;color:var(--amb)" id="t-end">--:--</span>
+      <span style="font-size:9px" id="t-mm">--</span>
+    </div>
+  </div>
+
+  <div class="cycle-area">
+    <div class="cycle-utc"><span style="color:var(--dim)">WINDOW </span><span id="t-utc">--:--:--</span></div>
+    <div class="bar-outer">
+      <div class="bar-fill" id="bar-fill" style="width:0"></div>
+      <div class="bar-kz" id="bar-kz" style="width:10%"></div>
+      <div class="bar-label" id="bar-pct">0%</div>
+    </div>
+    <div class="timer" id="timer">--s</div>
+  </div>
+
+  <div class="phase ph-IDLE" id="phase">IDLE</div>
+  <div style="display:flex;align-items:center;gap:4px">
+    <span class="conn-dot" id="conn-dot"></span>
+    <span id="t-rate" style="font-size:10px">--</span><span style="color:var(--dim);font-size:10px">/s</span>
+  </div>
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<div id="main">
+  <!-- Left: Charts -->
+  <div id="chart-col">
+    <div id="chart-stats">
+      <span class="chip"><span class="l">CVD</span><span class="v" id="cs-cvd">--</span></span>
+      <span class="chip"><span class="l">OBI</span><span class="v" id="cs-obi">--</span></span>
+      <span class="chip"><span class="l">Buy10s</span><span class="v up" id="cs-vbuy">--</span></span>
+      <span class="chip"><span class="l">Sell10s</span><span class="v dn" id="cs-vsell">--</span></span>
+      <span class="chip"><span class="l">Spread</span><span class="v" id="cs-spread">--</span></span>
+      <span class="chip"><span class="l">Depth</span><span class="v" id="cs-depth">--%</span></span>
+      <span class="chip"><span class="l">Strike→</span><span class="v bold" id="cs-strike">?</span></span>
+      <span class="chip"><span class="l">Predict</span><span class="v" id="cs-predict">? 0%</span></span>
+      <span class="chip"><span class="l">YES flow</span><span class="v" id="cs-yflow">-/-</span></span>
+      <span class="chip"><span class="l">NO flow</span><span class="v" id="cs-nflow">-/-</span></span>
+    </div>
+    <div class="chart-panel chart-panel-price" id="wrap-price">
+      <div class="chart-label">BTC / BINANCE — 3 CYCLES  (vertical lines = cycle boundaries, red zone = kill zone)</div>
+      <canvas id="chart-price"></canvas>
+    </div>
+    <div class="chart-panel chart-panel-vol" id="wrap-vol">
+      <div class="chart-label">BINANCE VOLUME (green=buy / red=sell)  +  POLY YES (lime) / NO (pink)</div>
+      <canvas id="chart-vol"></canvas>
+    </div>
+    <div class="chart-panel chart-panel-cvd" id="wrap-cvd">
+      <div class="chart-label">CVD — current window</div>
+      <canvas id="chart-cvd"></canvas>
+    </div>
+  </div>
+
+  <!-- Right: Sidebar -->
+  <div id="sidebar">
+    <!-- Prediction & MM -->
+    <div class="sb-block">
+      <div class="sb-title">PREDICTION <span class="badge" id="sb-mm">MM: --</span></div>
+      <div class="pred-row">
+        <div class="pred-dir" id="sb-pdir" style="color:var(--dim)">?</div>
+        <div class="pred-bar"><div class="pred-fill" id="sb-pbar" style="width:0%;background:var(--dim)"></div></div>
+        <div class="pred-conf" id="sb-pconf">0%</div>
+      </div>
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+        <span class="chip"><span class="l">Phase</span><span class="v" id="sb-phase">IDLE</span></span>
+        <span class="chip"><span class="l">Drains</span><span class="v dn" id="sb-drains">0</span></span>
+        <div id="sb-drain-list" style="font-size:10px;color:var(--red);margin-top:3px;width:100%"></div>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="sb-block">
+      <div class="sb-title">LIVE ALERTS</div>
+      <div class="alert-scroll" id="alerts"></div>
+    </div>
+
+    <!-- Binance Order Book -->
+    <div class="sb-block">
+      <div class="sb-title">BINANCE DEPTH <span class="badge" id="b-spread">spread --</span></div>
+      <div class="book-wrap">
+        <div class="book-section" style="color:var(--red)">ASKS ↑</div>
+        <div id="book-bin-asks"></div>
+        <div class="book-mid" id="book-bin-mid">mid $--</div>
+        <div id="book-bin-bids"></div>
+        <div class="book-section" style="color:var(--grn)">BIDS ↓</div>
+      </div>
+    </div>
+
+    <!-- Poly YES Book -->
+    <div class="sb-block">
+      <div class="sb-title" style="color:var(--grn)">POLY YES (UP) ORDER BOOK <span class="badge up" id="yes-dep">dep --</span></div>
+      <div class="depth-row">
+        <span class="chip up"><span class="l">Bid</span><span class="v" id="yes-bid-depth">--</span></span>
+        <span class="chip dn"><span class="l">Ask</span><span class="v" id="yes-ask-depth">--</span></span>
+      </div>
+      <div class="book-wrap">
+        <div class="book-section" style="color:var(--red)">ASKS ↑</div>
+        <div id="book-yes-asks"></div>
+        <div class="book-mid" id="book-yes-mid">spread --</div>
+        <div id="book-yes-bids"></div>
+        <div class="book-section" style="color:var(--grn)">BIDS ↓</div>
+      </div>
+    </div>
+
+    <!-- Poly NO Book -->
+    <div class="sb-block">
+      <div class="sb-title" style="color:var(--red)">POLY NO (DOWN) ORDER BOOK <span class="badge dn" id="no-dep">dep --</span></div>
+      <div class="depth-row">
+        <span class="chip up"><span class="l">Bid</span><span class="v" id="no-bid-depth">--</span></span>
+        <span class="chip dn"><span class="l">Ask</span><span class="v" id="no-ask-depth">--</span></span>
+      </div>
+      <div class="book-wrap">
+        <div class="book-section" style="color:var(--red)">ASKS ↑</div>
+        <div id="book-no-asks"></div>
+        <div class="book-mid" id="book-no-mid">spread --</div>
+        <div id="book-no-bids"></div>
+        <div class="book-section" style="color:var(--grn)">BIDS ↓</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ BOTTOM ═══ -->
+<div id="bottom">
+  <!-- History -->
+  <div id="history-section">
+    <div class="hist-header">
+      <span class="ht">Cycle History — BTC vs Poly Outcome</span>
+      <div class="pat-row">
+        <span class="pat-chip"><span style="color:var(--dim)">Win</span><span class="bold" id="ph-w"> --</span></span>
+        <span class="pat-chip"><span style="color:var(--red)">Rev</span><span class="bold dn" id="ph-r"> --</span></span>
+        <span class="pat-chip"><span style="color:var(--amb)">AvgKZ</span><span class="bold" id="ph-k"> --</span></span>
+        <span class="pat-chip"><span style="color:var(--cyn)">CVDAcc</span><span class="bold" id="ph-c"> --</span></span>
+        <span class="pat-chip"><span style="color:var(--dim)">OBIAcc</span><span class="bold" id="ph-o"> --</span></span>
+      </div>
+    </div>
+    <div class="hist-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>UTC</th>
+            <th>BTC Dir</th><th>Chg%</th>
+            <th>KZ Dir</th><th>KZ%</th><th>KZ $Vol</th>
+            <th>KZ CVD</th><th>CVD</th><th>OBI</th>
+            <th>POLY Result</th><th>YES end</th><th>NO end</th>
+            <th>YES start</th><th>NO start</th>
+            <th>Rev?</th>
+          </tr>
+        </thead>
+        <tbody id="hist-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Holders -->
+  <div id="holders-section">
+    <div class="holders-half">
+      <div class="hh">
+        <span style="color:var(--grn)">TOP HOLDERS — YES / UP</span>
+        <span style="font-size:10px">
+          Holders <span class="up" id="h-ycount">0</span> / Total <span class="up" id="h-yamt">$0</span>
+          <span style="color:var(--dim)">|</span>
+          Buy <span class="up" id="h-yb">0</span> / Sell <span class="dn" id="h-ys">0</span>
+        </span>
+      </div>
+      <div class="holders-scroll" id="h-yes"></div>
+    </div>
+    <div class="holders-half">
+      <div class="hh">
+        <span style="color:var(--red)">TOP HOLDERS — NO / DOWN</span>
+        <span style="font-size:10px">
+          Holders <span class="dn" id="h-ncount">0</span> / Total <span class="dn" id="h-namt">$0</span>
+          <span style="color:var(--dim)">|</span>
+          Buy <span class="up" id="h-nb">0</span> / Sell <span class="dn" id="h-ns">0</span>
+        </span>
+      </div>
+      <div class="holders-scroll" id="h-no"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CHART STATE — shared X axis for all 3 charts
+// ═══════════════════════════════════════════════════════
+const CS = { spanMs: 1, tfSec: 300, kzSec: 30, baseMs: 0, nowMs: 0 };
+const C = {
+  bg:'#070a0f', s1:'#0b0f18', grid:'rgba(30,39,51,.6)',
+  grn:'#22c55e', grnD:'rgba(34,197,94,.1)', grnL:'rgba(34,197,94,.35)',
+  red:'#ef4444', redD:'rgba(239,68,68,.1)', redL:'rgba(239,68,68,.35)',
+  blu:'#3b82f6', bluD:'rgba(59,130,246,.12)',
+  amb:'#f59e0b',
+  lime:'#84cc16', limeD:'rgba(132,204,22,.15)',
+  pink:'#ec4899', pinkD:'rgba(236,72,153,.15)',
+  kzBg:'rgba(239,68,68,.045)',
+  cycleLine:'rgba(59,130,246,.3)',
+  dim:'rgba(184,197,214,.4)',
+  bright:'#e8f0f8',
+};
+const dpr = window.devicePixelRatio || 1;
+
+function toX(offsetMs, w) {
+  return CS.spanMs > 0 ? Math.max(0, Math.min(w, (offsetMs / CS.spanMs) * w)) : 0;
+}
+
+function setupCanvas(el) {
+  const rect = el.parentElement.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  el.width = rect.width * dpr;
+  el.height = rect.height * dpr;
+  el.style.width = rect.width + 'px';
+  el.style.height = rect.height + 'px';
+  const ctx = el.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, w: rect.width, h: rect.height };
+}
+
+// Draw cycle boundaries and kill zone shading (shared across all charts)
+function drawCycleOverlays(ctx, w, h, showLabels) {
+  const tfMs = CS.tfSec * 1000;
+  const kzMs = CS.kzSec * 1000;
+
+  // Kill zone shading
+  for (let b = tfMs; b <= CS.spanMs + tfMs; b += tfMs) {
+    const ks = b - kzMs;
+    const ke = b;
+    if (ke < 0 || ks > CS.spanMs) continue;
+    const x1 = toX(Math.max(0, ks), w);
+    const x2 = toX(Math.min(CS.spanMs, ke), w);
+    ctx.fillStyle = C.kzBg;
+    ctx.fillRect(x1, 0, x2 - x1, h);
+    if (showLabels && x2 - x1 > 18) {
+      ctx.fillStyle = 'rgba(239,68,68,.3)';
+      ctx.font = `8px ${C._font||'JetBrains Mono'}`;
+      ctx.textAlign = 'left';
+      ctx.fillText('KZ', x1 + 2, 10);
+    }
+  }
+
+  // Cycle boundary lines with UTC labels
+  ctx.setLineDash([3, 4]);
+  ctx.lineWidth = 1;
+  for (let b = tfMs; b <= CS.spanMs; b += tfMs) {
+    const x = toX(b, w);
+    if (x < 2 || x > w - 2) continue;
+    ctx.beginPath();
+    ctx.strokeStyle = C.cycleLine;
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+    if (showLabels) {
+      const absMs = CS.baseMs + b;
+      const dt = new Date(absMs);
+      const lbl = dt.getUTCHours().toString().padStart(2,'0') + ':' + dt.getUTCMinutes().toString().padStart(2,'0');
+      ctx.fillStyle = C.cycleLine;
+      ctx.font = '8px JetBrains Mono';
+      ctx.textAlign = 'center';
+      ctx.fillText(lbl, x, h - 3);
+    }
+  }
+  ctx.setLineDash([]);
+}
+
+// Draw horizontal grid lines with Y labels
+function drawHGrid(ctx, w, h, yMin, yMax, nLines, fmtFn) {
+  const range = yMax - yMin || 1;
+  ctx.strokeStyle = C.grid;
+  ctx.lineWidth = 0.5;
+  ctx.font = '9px JetBrains Mono';
+  ctx.fillStyle = C.dim;
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= nLines; i++) {
+    const y = (i / nLines) * h;
+    const val = yMax - (i / nLines) * range;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+    ctx.fillText(fmtFn(val), w - 3, y - 2);
+  }
+}
+
+// Draw a line series, points = [[offsetMs, value], ...]
+function drawLineSeries(ctx, pts, w, h, yMin, yMax, color, fillColor) {
+  if (!pts || pts.length < 2) return;
+  const range = yMax - yMin || 1;
+  function y(v) { return h - ((v - yMin) / range) * h; }
+
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = 'round';
+  let started = false;
+  for (const [t, v] of pts) {
+    const px = toX(t, w);
+    const py = y(v);
+    if (!started) { ctx.moveTo(px, py); started = true; }
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  if (fillColor) {
+    const lastX = toX(pts[pts.length - 1][0], w);
+    const firstX = toX(pts[0][0], w);
+    ctx.lineTo(lastX, h);
+    ctx.lineTo(firstX, h);
+    ctx.closePath();
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+  }
+}
+
+// ─── PRICE CHART ───────────────────────────────────────
+function drawPriceChart(priceHist, polyYesHist, polyNoHist, histItems) {
+  const el = document.getElementById('chart-price');
+  const r = setupCanvas(el);
+  if (!r || !priceHist || priceHist.length < 2) return;
+  const { ctx, w, h } = r;
+
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, w, h);
+
+  const prices = priceHist.map(p => p[1]);
+  const pMin = Math.min(...prices);
+  const pMax = Math.max(...prices);
+  const pPad = (pMax - pMin) * 0.06 || 10;
+  const yMin = pMin - pPad, yMax = pMax + pPad;
+
+  drawCycleOverlays(ctx, w, h, true);
+  drawHGrid(ctx, w, h, yMin, yMax, 5, v => '$' + v.toLocaleString(undefined, {maximumFractionDigits: 0}));
+
+  // Poly YES/NO as thin overlay lines (if available)
+  if (polyYesHist && polyYesHist.length > 1) {
+    // Normalize to price scale: map [0,1] -> [yMin, yMax]
+    const yScale = (v) => yMin + v * (yMax - yMin);
+    const scaledYes = polyYesHist.map(([t, v]) => [t, yScale(v)]);
+    const scaledNo = polyNoHist.map(([t, v]) => [t, yScale(v)]);
+    drawLineSeries(ctx, scaledYes, w, h, yMin, yMax, 'rgba(34,197,94,.35)', null);
+    drawLineSeries(ctx, scaledNo, w, h, yMin, yMax, 'rgba(239,68,68,.35)', null);
+    // Labels
+    if (scaledYes.length > 0) {
+      const lx = toX(scaledYes[scaledYes.length - 1][0], w);
+      const lv = scaledYes[scaledYes.length - 1][1];
+      const ly = h - ((lv - yMin) / (yMax - yMin)) * h;
+      ctx.fillStyle = 'rgba(34,197,94,.6)';
+      ctx.font = '8px JetBrains Mono';
+      ctx.textAlign = 'left';
+      ctx.fillText('YES', Math.min(lx + 2, w - 25), ly);
+    }
+  }
+
+  // CVD history from past windows as dashed approximations
+  // Use histItems to draw approximate CVD per cycle
+  if (histItems && histItems.length > 0) {
+    const tfMs = CS.tfSec * 1000;
+    // Most recent completed cycles
+    [...histItems].reverse().forEach((item, i) => {
+      if (!item.ts) return;
+      const cycleStartMs = item.ts * 1000 - CS.baseMs;
+      const cycleEndMs = cycleStartMs + tfMs;
+      if (cycleEndMs < 0 || cycleStartMs > CS.spanMs) return;
+      // Show CVD direction as a colored dot/marker on chart
+      const x = toX(Math.min(cycleEndMs - 1000, CS.spanMs - 500), w);
+      const cvdColor = item.cvd > 0 ? 'rgba(34,197,94,.6)' : 'rgba(239,68,68,.6)';
+      ctx.beginPath();
+      ctx.arc(x, 10, 3, 0, Math.PI * 2);
+      ctx.fillStyle = cvdColor;
+      ctx.fill();
+    });
+  }
+
+  // Main BTC price line
+  const lastPrice = prices[prices.length - 1];
+  const firstPrice = prices[0];
+  const priceColor = lastPrice >= firstPrice ? C.grn : C.red;
+  const priceFill = lastPrice >= firstPrice ? C.grnD : C.redD;
+  drawLineSeries(ctx, priceHist, w, h, yMin, yMax, priceColor, priceFill);
+
+  // Current price label + crosshair
+  const curY = h - ((lastPrice - yMin) / (yMax - yMin)) * h;
+  const curX = toX(priceHist[priceHist.length - 1][0], w);
+
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,255,255,.15)';
+  ctx.setLineDash([2, 6]);
+  ctx.lineWidth = 0.8;
+  ctx.moveTo(0, curY);
+  ctx.lineTo(w, curY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Price tag
+  const priceLabel = '$' + lastPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  ctx.font = 'bold 10px JetBrains Mono';
+  ctx.fillStyle = priceColor;
+  ctx.textAlign = 'right';
+  const tagW = ctx.measureText(priceLabel).width + 8;
+  ctx.fillStyle = priceColor + '30';
+  ctx.fillRect(w - tagW - 4, curY - 9, tagW + 4, 14);
+  ctx.fillStyle = priceColor;
+  ctx.fillText(priceLabel, w - 4, curY + 2);
+}
+
+// ─── VOLUME CHART ───────────────────────────────────────
+function drawVolChart(binVolHist, polyVolHist) {
+  const el = document.getElementById('chart-vol');
+  const r = setupCanvas(el);
+  if (!r) return;
+  const { ctx, w, h } = r;
+
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, w, h);
+
+  drawCycleOverlays(ctx, w, h, false);
+
+  if (!binVolHist || binVolHist.length < 2) return;
+
+  const allMaxes = binVolHist.map(([, buy, sell]) => buy + sell);
+  const polyMaxes = (polyVolHist || []).map(([, y, n]) => y + n);
+  const maxVol = Math.max(...allMaxes, ...polyMaxes, 0.0001);
+
+  const bucketCount = binVolHist.length;
+  const bw = Math.max(2, (w / bucketCount) - 0.5);
+
+  // Draw poly volume first (as lighter background bars)
+  if (polyVolHist && polyVolHist.length > 0) {
+    for (let i = 0; i < polyVolHist.length; i++) {
+      const [off, yesV, noV] = polyVolHist[i];
+      const x = toX(off, w);
+      const yesH = (yesV / maxVol) * h;
+      const noH = (noV / maxVol) * h;
+      // YES vol: lime, top half
+      if (yesH > 0) {
+        ctx.fillStyle = C.limeD;
+        ctx.fillRect(x, h / 2 - yesH, bw, yesH);
+      }
+      // NO vol: pink, bottom half
+      if (noH > 0) {
+        ctx.fillStyle = C.pinkD;
+        ctx.fillRect(x, h / 2, bw, noH);
+      }
+    }
+  }
+
+  // Binance volume (buy=green above center, sell=red below center)
+  for (let i = 0; i < binVolHist.length; i++) {
+    const [off, buyV, sellV] = binVolHist[i];
+    const x = toX(off, w);
+    const buyH = (buyV / maxVol) * (h * 0.5);
+    const sellH = (sellV / maxVol) * (h * 0.5);
+    if (buyH > 0) {
+      ctx.fillStyle = C.grn;
+      ctx.fillRect(x, h / 2 - buyH, bw, buyH);
+    }
+    if (sellH > 0) {
+      ctx.fillStyle = C.red;
+      ctx.fillRect(x, h / 2, bw, sellH);
+    }
+  }
+
+  // Center line
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(184,197,214,.12)';
+  ctx.lineWidth = 0.8;
+  ctx.moveTo(0, h / 2);
+  ctx.lineTo(w, h / 2);
+  ctx.stroke();
+
+  // Legend
+  ctx.font = '8px JetBrains Mono';
+  ctx.textAlign = 'left';
+  const leg = [['BUY', C.grn], ['SELL', C.red], ['YES', C.lime], ['NO', C.pink]];
+  let lx = 4;
+  for (const [lbl, col] of leg) {
+    ctx.fillStyle = col;
+    ctx.fillText(lbl, lx, h - 3);
+    lx += ctx.measureText(lbl).width + 10;
+  }
+}
+
+// ─── CVD CHART ─────────────────────────────────────────
+function drawCvdChart(cvdHist) {
+  const el = document.getElementById('chart-cvd');
+  const r = setupCanvas(el);
+  if (!r) return;
+  const { ctx, w, h } = r;
+
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, w, h);
+
+  drawCycleOverlays(ctx, w, h, false);
+
+  // Zero line
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(184,197,214,.1)';
+  ctx.lineWidth = 0.8;
+  ctx.moveTo(0, h / 2);
+  ctx.lineTo(w, h / 2);
+  ctx.stroke();
+
+  if (!cvdHist || cvdHist.length < 2) {
+    ctx.fillStyle = C.dim;
+    ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText('Waiting for current window data...', w / 2, h / 2 + 4);
+    return;
+  }
+
+  const vals = cvdHist.map(p => p[1]);
+  const absMax = Math.max(Math.abs(Math.min(...vals)), Math.abs(Math.max(...vals)), 0.01) * 1.15;
+
+  function yCvd(v) { return h / 2 - (v / absMax) * (h / 2 - 4); }
+
+  // Fill
+  const lastV = vals[vals.length - 1];
+  ctx.beginPath();
+  let started = false;
+  for (const [t, v] of cvdHist) {
+    const px = toX(t, w);
+    const py = yCvd(v);
+    if (!started) { ctx.moveTo(px, py); started = true; }
+    else ctx.lineTo(px, py);
+  }
+  const endX = toX(cvdHist[cvdHist.length - 1][0], w);
+  const startX = toX(cvdHist[0][0], w);
+  ctx.lineTo(endX, h / 2);
+  ctx.lineTo(startX, h / 2);
+  ctx.closePath();
+  ctx.fillStyle = lastV >= 0 ? C.grnD : C.redD;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle = lastV >= 0 ? C.grn : C.red;
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = 'round';
+  started = false;
+  for (const [t, v] of cvdHist) {
+    const px = toX(t, w);
+    const py = yCvd(v);
+    if (!started) { ctx.moveTo(px, py); started = true; }
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  // Label
+  ctx.font = 'bold 9px JetBrains Mono';
+  ctx.fillStyle = lastV >= 0 ? C.grn : C.red;
+  ctx.textAlign = 'right';
+  ctx.fillText((lastV >= 0 ? '+' : '') + lastV.toFixed(3), w - 4, lastV >= 0 ? h / 2 - 3 : h / 2 + 10);
+}
+
+// ═══════════════════════════════════════════════════════
+// ORDER BOOK RENDERER
+// ═══════════════════════════════════════════════════════
+function renderBook(asksEl, bidsEl, midEl, bids, asks, isCents) {
+  if (!bids || !asks) return;
+  const fmt = isCents
+    ? (v) => v.toFixed(4)
+    : (v) => '$' + v.toLocaleString(undefined, {maximumFractionDigits: 2, minimumFractionDigits: 2});
+  const fmtQ = (v) => v >= 1000 ? (v/1000).toFixed(1)+'k' : v >= 1 ? v.toFixed(2) : v.toFixed(4);
+
+  const sortedBids = [...bids].sort((a, b) => b[0] - a[0]);
+  const sortedAsks = [...asks].sort((a, b) => a[0] - b[0]);
+  const allQtys = [...sortedBids.map(b => b[1]), ...sortedAsks.map(a => a[1])];
+  const maxQ = Math.max(...allQtys, 0.0001);
+
+  // Asks: show reversed (best ask at bottom near mid)
+  asksEl.innerHTML = [...sortedAsks].reverse().slice(0, 8).map(([price, qty]) => {
+    const pct = (qty / maxQ * 100).toFixed(0);
+    return `<div class="book-row">
+      <div class="book-bg" style="width:${pct}%;background:rgba(239,68,68,.12)"></div>
+      <span class="book-price" style="color:#ef4444">${fmt(price)}</span>
+      <span class="book-qty">${fmtQ(qty)}</span>
+    </div>`;
+  }).join('');
+
+  // Mid
+  if (sortedBids.length > 0 && sortedAsks.length > 0) {
+    const mid = (sortedBids[0][0] + sortedAsks[0][0]) / 2;
+    const spread = sortedAsks[0][0] - sortedBids[0][0];
+    midEl.textContent = `${fmt(mid)}  spread: ${isCents ? spread.toFixed(4) : '$' + spread.toFixed(2)}`;
+  } else {
+    midEl.textContent = 'awaiting data...';
+  }
+
+  // Bids (best near mid)
+  bidsEl.innerHTML = sortedBids.slice(0, 8).map(([price, qty]) => {
+    const pct = (qty / maxQ * 100).toFixed(0);
+    return `<div class="book-row">
+      <div class="book-bg" style="width:${pct}%;background:rgba(34,197,94,.12)"></div>
+      <span class="book-price" style="color:#22c55e">${fmt(price)}</span>
+      <span class="book-qty">${fmtQ(qty)}</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// WEBSOCKET
+// ═══════════════════════════════════════════════════════
+let connected = false;
+const ws = new WebSocket('ws://' + location.host + '/ws');
+
+ws.onopen = () => {
+  connected = true;
+  document.getElementById('conn-dot').classList.remove('off');
+};
+ws.onclose = () => {
+  connected = false;
+  document.getElementById('conn-dot').classList.add('off');
+  document.getElementById('timer').textContent = 'DC';
+  document.getElementById('timer').style.color = '#ef4444';
+};
+
+ws.onmessage = (e) => {
+  const d = JSON.parse(e.data);
+  const coin = d.coins[0];
+  if (!coin) return;
+  const c = d.coin_data[coin] || {};
+
+  // Update chart state
+  CS.spanMs = d.chart_span_ms || 1;
+  CS.tfSec = d.tf_sec || 300;
+  CS.kzSec = d.kz_sec || 30;
+  CS.baseMs = d.base_ms || 0;
+  CS.nowMs = d.now_ms || Date.now();
+
+  // ── TOPBAR ──
+  document.getElementById('t-sym').textContent = coin + '/USDT';
+  const price = c.price || 0;
+  const priceEl = document.getElementById('t-price');
+  priceEl.textContent = '$' + price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  priceEl.style.color = (c.change || 0) >= 0 ? 'var(--grn)' : 'var(--red)';
+
+  const chgEl = document.getElementById('t-chg');
+  chgEl.textContent = ((c.change || 0) >= 0 ? '+' : '') + (c.change || 0).toFixed(4) + '%';
+  chgEl.className = 'ticker-chg ' + ((c.change || 0) >= 0 ? 'chg-up' : 'chg-dn');
+
+  document.getElementById('t-open').textContent = '$' + (c.open_price || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  document.getElementById('t-ticks').textContent = (c.tick_rate || 0).toFixed(0);
+  document.getElementById('t-rate').textContent = (c.tick_rate || 0).toFixed(0);
+
+  // Poly tickers
+  const yesP = c.poly_yes || 0.5, noP = c.poly_no || 0.5;
+  document.getElementById('t-yes').textContent = '$' + yesP.toFixed(4);
+  document.getElementById('t-no').textContent = '$' + noP.toFixed(4);
+  document.getElementById('t-end').textContent = c.poly_end_time || '--:--';
+
+  // Poly flows on tickers
+  const pf = c.poly_flow || {};
+  document.getElementById('t-yes-flow').textContent = 'B:' + (pf.yes_buy||0).toFixed(1) + ' S:' + (pf.yes_sell||0).toFixed(1);
+  document.getElementById('t-no-flow').textContent = 'B:' + (pf.no_buy||0).toFixed(1) + ' S:' + (pf.no_sell||0).toFixed(1);
+
+  const mmEl = document.getElementById('t-mm');
+  mmEl.textContent = c.mm_status || 'UNKNOWN';
+  mmEl.className = 'mm-pill mm-' + (c.mm_status || 'UNKNOWN');
+
+  // Cycle bar
+  document.getElementById('t-utc').textContent = d.window_utc;
+  const timerEl = document.getElementById('timer');
+  timerEl.textContent = d.remaining.toFixed(1) + 's';
+  timerEl.className = 'timer' + (d.kill_zone ? ' kz' : '');
+  if (!d.kill_zone) timerEl.style.color = '';
+
+  const bf = document.getElementById('bar-fill');
+  bf.style.width = d.pct_elapsed + '%';
+  if (d.kill_zone) {
+    bf.style.background = 'linear-gradient(90deg,rgba(239,68,68,.25),rgba(239,68,68,.5))';
+    bf.style.borderRightColor = 'var(--red)';
+  } else {
+    bf.style.background = '';
+    bf.style.borderRightColor = '';
+  }
+  document.getElementById('bar-kz').style.width = (CS.kzSec / CS.tfSec * 100) + '%';
+  document.getElementById('bar-kz').className = 'bar-kz' + (d.kill_zone ? ' active' : '');
+  document.getElementById('bar-pct').textContent = d.pct_elapsed.toFixed(0) + '%';
+
+  const phEl = document.getElementById('phase');
+  phEl.textContent = d.phase;
+  phEl.className = 'phase ph-' + d.phase;
+
+  // ── CHART STATS ──
+  const cvdV = c.cvd || 0;
+  const cvdEl = document.getElementById('cs-cvd');
+  cvdEl.textContent = (cvdV >= 0 ? '+' : '') + cvdV.toFixed(3);
+  cvdEl.className = 'v ' + (cvdV >= 0 ? 'up' : 'dn');
+
+  document.getElementById('cs-obi').textContent = (c.obi || 0.5).toFixed(3);
+  document.getElementById('cs-vbuy').textContent = (c.buy_vol_10s || 0).toFixed(3);
+  document.getElementById('cs-vsell').textContent = (c.sell_vol_10s || 0).toFixed(3);
+
+  const sprEl = document.getElementById('cs-spread');
+  sprEl.textContent = (c.poly_spread || 0).toFixed(4);
+  const sprBase = c.poly_spread_baseline || 0;
+  if (sprBase > 0) {
+    const ratio = (c.poly_spread || 0) / sprBase;
+    sprEl.style.color = ratio > 2 ? 'var(--red)' : ratio > 1.3 ? 'var(--amb)' : 'var(--tx)';
+  }
+
+  const depEl = document.getElementById('cs-depth');
+  const depPct = c.poly_depth_pct || 100;
+  depEl.textContent = depPct.toFixed(0) + '%';
+  depEl.style.color = depPct < 40 ? 'var(--red)' : depPct < 70 ? 'var(--amb)' : 'var(--tx)';
+
+  const strikeEl = document.getElementById('cs-strike');
+  strikeEl.textContent = c.strike_dir || '?';
+  strikeEl.className = 'v bold ' + (c.strike_dir === 'UP' ? 'up' : c.strike_dir === 'DOWN' ? 'dn' : 'fl');
+
+  const pred = c.predict_dir || '?';
+  const pconf = c.predict_conf || 0;
+  const predEl = document.getElementById('cs-predict');
+  predEl.textContent = pred + ' ' + (pconf * 100).toFixed(0) + '%';
+  predEl.className = 'v ' + (pred === 'UP' ? 'up' : pred === 'DOWN' ? 'dn' : 'fl');
+
+  document.getElementById('cs-yflow').textContent = (pf.yes_buy||0).toFixed(1) + '/' + (pf.yes_sell||0).toFixed(1);
+  document.getElementById('cs-nflow').textContent = (pf.no_buy||0).toFixed(1) + '/' + (pf.no_sell||0).toFixed(1);
+
+  // ── DRAW CHARTS ──
+  drawPriceChart(c.price_hist, c.poly_yes_hist, c.poly_no_hist, d.history);
+  drawVolChart(c.bin_vol_hist, c.poly_vol_hist);
+  drawCvdChart(c.cvd_hist);
+
+  // ── SIDEBAR ──
+  // Prediction
+  document.getElementById('sb-pdir').textContent = pred;
+  document.getElementById('sb-pdir').style.color = pred === 'UP' ? 'var(--grn)' : pred === 'DOWN' ? 'var(--red)' : 'var(--dim)';
+  const pbarEl = document.getElementById('sb-pbar');
+  pbarEl.style.width = (pconf * 100) + '%';
+  pbarEl.style.background = pred === 'UP' ? 'var(--grn)' : pred === 'DOWN' ? 'var(--red)' : 'var(--dim)';
+  document.getElementById('sb-pconf').textContent = (pconf * 100).toFixed(0) + '%';
+
+  const mmPill = document.getElementById('sb-mm');
+  mmPill.textContent = 'MM: ' + (c.mm_status || 'UNKNOWN');
+  mmPill.className = 'badge mm-pill mm-' + (c.mm_status || 'UNKNOWN');
+
+  const phaseEl = document.getElementById('sb-phase');
+  phaseEl.textContent = d.phase;
+  phaseEl.style.color = {IDLE:'var(--dim)',DRAIN_DETECTED:'var(--amb)',MM_FLEEING:'#f97316',STRIKE_IMMINENT:'var(--red)'}[d.phase] || 'var(--dim)';
+
+  const drains = c.drain_events || [];
+  document.getElementById('sb-drains').textContent = drains.length;
+  document.getElementById('sb-drain-list').innerHTML = drains.slice(0, 3).map(dr =>
+    `<div>-${dr.pct.toFixed(0)}% ${dr.side} (${dr.age.toFixed(0)}s ago)</div>`
+  ).join('');
+
+  // Alerts
+  document.getElementById('alerts').innerHTML = (d.alerts || []).map(a => {
+    const sc = {CRITICAL:'C',HIGH:'H',WARN:'W',INFO:'I'}[a.severity] || 'I';
+    return `<div class="arow"><span class="ts">${a.time.substring(0, 8)}</span><span class="sv sv-${sc}">${a.severity.substring(0,4)}</span><span class="msg">${a.message}</span></div>`;
+  }).join('');
+
+  // Order books
+  renderBook(
+    document.getElementById('book-bin-asks'),
+    document.getElementById('book-bin-bids'),
+    document.getElementById('book-bin-mid'),
+    c.binance_bids || [], c.binance_asks || [], false
+  );
+  document.getElementById('b-spread').textContent =
+    (c.binance_asks && c.binance_bids && c.binance_asks.length && c.binance_bids.length)
+    ? 'spread $' + Math.abs(c.binance_asks[0][0] - c.binance_bids[0][0]).toFixed(2)
+    : 'spread --';
+
+  renderBook(
+    document.getElementById('book-yes-asks'),
+    document.getElementById('book-yes-bids'),
+    document.getElementById('book-yes-mid'),
+    c.poly_yes_bids || [], c.poly_yes_asks || [], true
+  );
+  const yesBidTot = (c.poly_yes_bids || []).reduce((s, [p, q]) => s + q, 0);
+  const yesAskTot = (c.poly_yes_asks || []).reduce((s, [p, q]) => s + q, 0);
+  const yesBidNot = (c.poly_yes_bids || []).reduce((s, [p, q]) => s + p * q, 0);
+  const yesAskNot = (c.poly_yes_asks || []).reduce((s, [p, q]) => s + p * q, 0);
+  const fmtDepth = (qty, not) => {
+    const qtyTxt = qty >= 1000 ? (qty / 1000).toFixed(1) + 'k' : qty.toFixed(1);
+    let notTxt = not >= 1 ? '$' + not.toFixed(0) : '$' + not.toFixed(2);
+    if (not >= 1000 && not < 1000000) notTxt = '$' + (not / 1000).toFixed(1) + 'k';
+    if (not >= 1000000) notTxt = '$' + (not / 1000000).toFixed(2) + 'm';
+    return `${qtyTxt} (${notTxt})`;
+  };
+  document.getElementById('yes-dep').textContent = `B:${yesBidTot.toFixed(1)} A:${yesAskTot.toFixed(1)}`;
+  document.getElementById('yes-bid-depth').textContent = fmtDepth(yesBidTot, yesBidNot);
+  document.getElementById('yes-ask-depth').textContent = fmtDepth(yesAskTot, yesAskNot);
+
+  renderBook(
+    document.getElementById('book-no-asks'),
+    document.getElementById('book-no-bids'),
+    document.getElementById('book-no-mid'),
+    c.poly_no_bids || [], c.poly_no_asks || [], true
+  );
+  const noBidTot = (c.poly_no_bids || []).reduce((s, [p, q]) => s + q, 0);
+  const noAskTot = (c.poly_no_asks || []).reduce((s, [p, q]) => s + q, 0);
+  const noBidNot = (c.poly_no_bids || []).reduce((s, [p, q]) => s + p * q, 0);
+  const noAskNot = (c.poly_no_asks || []).reduce((s, [p, q]) => s + p * q, 0);
+  document.getElementById('no-dep').textContent = `B:${noBidTot.toFixed(1)} A:${noAskTot.toFixed(1)}`;
+  document.getElementById('no-bid-depth').textContent = fmtDepth(noBidTot, noBidNot);
+  document.getElementById('no-ask-depth').textContent = fmtDepth(noAskTot, noAskNot);
+
+  // ── HISTORY TABLE ──
+  const tbody = document.getElementById('hist-body');
+  tbody.innerHTML = (d.history || []).reverse().map(w => {
+    const dc = w.dir === 'UP' ? 'c-up' : w.dir === 'DOWN' ? 'c-dn' : 'c-fl';
+    const kc = w.kz_dir === 'UP' ? 'c-up' : w.kz_dir === 'DOWN' ? 'c-dn' : 'c-fl';
+    const pc = w.poly.includes('UP') ? 'c-up settled' : w.poly.includes('DOWN') ? 'c-dn settled' : 'c-fl';
+    const match = (w.poly.includes('UP') && w.dir === 'UP') || (w.poly.includes('DOWN') && w.dir === 'DOWN');
+    const mismatch = (w.poly.includes('UP') && w.dir === 'DOWN') || (w.poly.includes('DOWN') && w.dir === 'UP');
+    return `<tr style="${w.rev ? 'background:rgba(239,68,68,.06)' : ''}">
+      <td style="color:var(--dim)">${w.time}</td>
+      <td class="${dc} bold">${w.dir}</td>
+      <td class="${dc}">${(w.chg >= 0 ? '+' : '') + w.chg.toFixed(4)}%</td>
+      <td class="${kc}">${w.kz_dir}</td>
+      <td class="${kc}">${(w.kz_chg >= 0 ? '+' : '') + w.kz_chg.toFixed(4)}%</td>
+      <td>$${w.kz_dvol.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+      <td style="color:${w.kz_cvd > 0 ? 'var(--grn)' : 'var(--red)'}">${(w.kz_cvd >= 0 ? '+' : '') + (w.kz_cvd || 0).toFixed(2)}</td>
+      <td style="color:${w.cvd > 0 ? 'var(--grn)' : 'var(--red)'}">${(w.cvd >= 0 ? '+' : '') + (w.cvd || 0).toFixed(2)}</td>
+      <td style="color:${w.obi > 0.52 ? 'var(--grn)' : w.obi < 0.48 ? 'var(--red)' : 'var(--dim)'}">${(w.obi || 0.5).toFixed(3)}</td>
+      <td class="${pc}" style="${mismatch ? 'background:rgba(239,68,68,.1)' : match ? 'background:rgba(34,197,94,.06)' : ''}">${w.poly || '?'}${w.poly_settled ? ' [S]' : ''}</td>
+      <td style="color:var(--grn)">${w.py || '--'}</td>
+      <td style="color:var(--red)">${w.pn || '--'}</td>
+      <td style="color:var(--dim)">${w.py_start || '--'}</td>
+      <td style="color:var(--dim)">${w.pn_start || '--'}</td>
+      <td style="${w.rev ? 'color:var(--red);font-weight:700' : 'color:var(--dim)'}">${w.rev ? 'REV' : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  // ── PATTERNS ──
+  const p = d.patterns || {};
+  document.getElementById('ph-w').textContent = ' ' + (p.count || 0);
+  document.getElementById('ph-r').textContent = ' ' + (p.reversals || 0) + ' (' + (p.rev_pct || 0).toFixed(0) + '%)';
+  document.getElementById('ph-k').textContent = ' ' + (p.avg_kz_chg || 0).toFixed(4) + '%';
+  document.getElementById('ph-c').textContent = ' ' + (p.cvd_accuracy || 0).toFixed(0) + '%';
+  document.getElementById('ph-o').textContent = ' ' + (p.obi_accuracy || '--') + '%';
+
+  // ── HOLDERS ──
+  function renderHolders(id, holders, color) {
+    const el = document.getElementById(id);
+    if (!holders || !holders.length) {
+      el.innerHTML = '<div style="color:var(--dim);padding:4px 0">Fetching... (updates every 20s)</div>';
+      return;
+    }
+    const maxA = Math.max(...holders.map(h => h.amount), 1);
+    el.innerHTML = holders.map((h, i) =>
+      `<div class="hrow">
+        <span style="width:14px;color:var(--dim);text-align:right;flex-shrink:0">${i+1}</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${h.wallet}">${h.name || h.wallet.substring(0, 10)}</span>
+        <div class="hbar" style="width:${(h.amount/maxA*55).toFixed(0)}px;background:${color}"></div>
+        <span style="min-width:55px;text-align:right;font-weight:600">$${h.amount.toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+      </div>`
+    ).join('');
+  }
+  renderHolders('h-yes', c.holders_yes || [], 'var(--grn)');
+  renderHolders('h-no', c.holders_no || [], 'var(--red)');
+
+  document.getElementById('h-yb').textContent = (pf.yes_buy || 0).toFixed(1);
+  document.getElementById('h-ys').textContent = (pf.yes_sell || 0).toFixed(1);
+  document.getElementById('h-nb').textContent = (pf.no_buy || 0).toFixed(1);
+  document.getElementById('h-ns').textContent = (pf.no_sell || 0).toFixed(1);
+
+  const ht = c.holders_totals || { yes_count: 0, no_count: 0, yes_amt: 0, no_amt: 0 };
+  const fmtAmt = (v) => v >= 1000000 ? '$' + (v / 1000000).toFixed(2) + 'm'
+    : v >= 1000 ? '$' + (v / 1000).toFixed(1) + 'k'
+    : '$' + v.toFixed(0);
+  document.getElementById('h-ycount').textContent = (ht.yes_count || 0).toLocaleString();
+  document.getElementById('h-ncount').textContent = (ht.no_count || 0).toLocaleString();
+  document.getElementById('h-yamt').textContent = fmtAmt(ht.yes_amt || 0);
+  document.getElementById('h-namt').textContent = fmtAmt(ht.no_amt || 0);
+
+  // ── BODY GLOW based on phase ──
+  document.body.className = d.phase === 'STRIKE_IMMINENT' ? 'glow-strike' :
+    d.phase === 'MM_FLEEING' ? 'glow-flee' :
+    d.phase === 'DRAIN_DETECTED' ? 'glow-drain' : '';
+};
+
+// Redraw charts on resize
+let rTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(rTimer);
+  rTimer = setTimeout(() => {
+    // Charts will redraw on next WS message
+  }, 200);
+});
+</script>
+</body>
+</html>
